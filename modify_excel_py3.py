@@ -26,22 +26,15 @@ pandas只能新建excel文件并进行写入并不能把表格写入到已经存
 
 
 '''
-class使用说明：
-1.首先必须要实例化对象
-2.必须要定义操作excel表格的函数（注意必须设置两个参数）
-3.调用实例方法进行excel操作
 
+#回过头来发现以前用类的方法来对excel进行修改太麻烦，代码写的太渣。
+#应该使用装饰器就可以了
+#使用范例
+@tables_to_sheets(locate=r"G:\my_new.xlsx", sheetname="bb")
+def tt(app, wb, sht):
+    sht.range('c20').options(transpose=True).value = ["hfd", "11", "er", "24", "op", "asjk"]
 
-
-# 定义对excel表格的操作函数。必须注意必须要有两个参数一个是workbook一个是worksheet
-# def cellfunc(mbooks,sht):
-#     sht.range('e10').value='wangqian'
-
-# a=modify_excel_cells('d:\\test\\test5.xlsx','er')
-# 实例化对象
-# a.modify_excel(cellfunc)
-# 调用实例的修改功能，修改存在excel中的具体操作。使用的语法是xlwings
-
+tt()
 
 '''
 
@@ -50,66 +43,40 @@ class使用说明：
 
 ##################################################
 
-
-class modify_excel_cells:
-    def __init__(self,filepath,tablename):
-        self.filepath=filepath
-        self.tablename=tablename
-    def open_excel(self,sflag=None):
-        if os.path.exists(self.filepath):
-            mbooks=xw.Book(self.filepath)
-            for a in mbooks.sheets:
-                if self.tablename in a.name:
-                    sflag=True    # 判断是否存在
-            if sflag is True:
-                sht=mbooks.sheets[self.tablename]
-                sht.activate()
-            else:
-                sht=mbooks.sheets.add(self.tablename)
-        else:
-            mbooks=xw.Book()
-            sht=mbooks.sheets.add(self.tablename)
-        return mbooks,sht,sflag
-
-    def modify_excel(self,func):
-        '''
-        这个函数是主要用于处理存在的sheet，想把对sheets操作的部分单独用一个函数引入
-        参数引入工作薄和工作表，经过处理将保存好的工作薄和工作表返回给函数主体。
-        当然可以先用
-        :param func:mbooks,sht
-        :return:mbooks,sht
-        '''
-        mbooks,sht,sflag=self.open_excel()
-        if  not sflag:
-            print ('该表格不存在请重新检查')
-            exit()
-        else:
-            # 尝试把新的操作用函数独立出去
-            def cellfunc(mbooks=mbooks,sht=sht):
-                func(mbooks,sht)
-                return mbooks,sht
-            cellfunc()
+def tables_to_sheets(locate, sheetname):
+    # 该装饰器主要用于将表格或者list等数据存到指定的sheet中
+    # 如果xlsx文件不存在则创建文件，如果sheet不存在则创建sheet。
+    # 缺点是xlsx文件没有办法设定编码。
+    def outer_sheet(func):
+        def inner_sheet(*args, **kwargs):
+            sheetlist=[]
+            app = xw.App(visible=True, add_book=False)
+            app.display_alerts = True
+            app.screen_updating = False
+            if not os.path.exists(locate):
+                print("excel文件不存在，正在创建文件")
+                app = xw.App(visible=True, add_book=False)
+                wb = app.books.add()
+                wb.save(locate)
+                wb.close()
+                app.quit()
+            print("excel已经存在，正在打开。。。")
+            wb = app.books.open(locate)
+            for a in wb.sheets:
+                sheetlist.append(a.name)
+            if sheetname not in sheetlist:
+                wb.sheets.add(sheetname)
+            sht = wb.sheets[sheetname]
             sht.activate()
-            rng=sht.range('a1').current_region
+            func(app=app, wb=wb, sht=sht)
+            rng = sht.range('a1').current_region
             rng.autofit()
-            mbooks.save()
-            mbooks.close()
-
-    def insert_new_sheet(self,table=None):
-        mbooks,sht,sflag=self.open_excel()
-        sht.activate()
-        sht.clear()
-        sht.range('a1').value=table
-        rng=sht.range('a1').current_region
-        rng.autofit()
-        if sflag is True:
-            mbooks.save()
-            mbooks.close()
-        else:
-            mbooks.save(path=self.filepath)
-            mbooks.close()
-
-
+            wb.save()
+            wb.close()
+            app.quit()
+            return func
+        return inner_sheet
+    return outer_sheet
 
 
 
